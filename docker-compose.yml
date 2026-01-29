@@ -1,0 +1,10 @@
+services:
+  msi-bot:
+    image: nightmean/msi-reward-bot:latest
+    container_name: msi_reward_bot
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./screenshots:/app/screenshots
+    env_file:
+      - .env
