@@ -57,6 +57,7 @@ Automating actions on rewards.msi.com may violate their Terms of Service. Use at
 | `MILESTONES` | Comma-separated points milestones to track | 400,500,600 | No |
 | `CRON_SCHEDULE` | Cron expression for when the bot runs | `30 18 * * *` (18:30) | No |
 | `TZ` | Timezone for the cron schedule and logs | `Europe/Bratislava` | No |
+| `NAVIGATION_TIMEOUT` | Timeout in ms for page loads. Increase if getting timeouts. | `60000` (60s) | No |
 | `SAVE_SCREENSHOTS` | Save debug screenshots to `screenshots/` folder | `false` | No |
 
 ## Build from Source
@@ -71,6 +72,7 @@ Automating actions on rewards.msi.com may violate their Terms of Service. Use at
 ## Troubleshooting
 
 - **403 Access Denied**: The bot tries to handle this by using a Desktop User-Agent. If it fails, check logs for error messages and look in the `screenshots/` folder for `debug_error.png`.
+- **Navigation Timeout**: If you see "Navigation timeout of X ms exceeded", your connection might be slow or the server overloaded. Increase `NAVIGATION_TIMEOUT` in `.env` (e.g. `120000` for 2 minutes).
 
 ## Donations
 To support me you can use link below:

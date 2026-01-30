@@ -15,6 +15,11 @@ const MILESTONES = (process.env.MILESTONES || '400,500,600').split(',').map(Numb
 const TIMEZONE = process.env.TZ || 'Europe/Bratislava';
 const SAVE_SCREENSHOTS = process.env.SAVE_SCREENSHOTS === 'true';
 const DISCORD_USERNAME = process.env.DISCORD_USERNAME || 'MSI Rewards Daily Login Bot';
+
+
+const NAVIGATION_TIMEOUT = parseInt(process.env.NAVIGATION_TIMEOUT || '60000', 10);
+const MAX_RETRIES = parseInt(process.env.MAX_RETRIES || '3', 10);
+const RETRY_DELAY = parseInt(process.env.RETRY_DELAY || '30000', 10); // 30 seconds
 const POINTS_SELECTOR = '.kv__memberbox--info li:nth-child(2)';
 
 // Ensure directories exist
@@ -92,7 +97,10 @@ async function runBot() {
         }
 
         // Navigate
-        await page.goto('https://rewards.msi.com/', { waitUntil: 'networkidle2' });
+        await page.goto('https://rewards.msi.com/', {
+            waitUntil: 'networkidle2',
+            timeout: NAVIGATION_TIMEOUT
+        });
         log('Page loaded.');
 
         // Scroll to top (User reported auto-scroll might hide points)
@@ -110,7 +118,7 @@ async function runBot() {
 
         // Wait for the element to appear (timeout 5s to be safe, though networkidle2 should suffice)
         try {
-            await page.waitForSelector(pointsElementIdentifier, { timeout: 5000 });
+            await page.waitForSelector(pointsElementIdentifier, { timeout: 10000 }); // 10s wait for element
         } catch (e) {
             log('WARNING: Points element not immediately found.');
         }
@@ -184,34 +192,72 @@ async function runBot() {
         log(`ERROR: ${error.message}`);
         await sendDiscordNotification('error', { message: error.message });
         if (browser) await browser.close(); // Safety close
-        return { success: false, error: error.message };
+
+        // Check for Fatal Errors (Configuration issues)
+        const isFatal = error.message.includes('cookies.json') || error.message.includes('Invalid JSON');
+        return { success: false, error: error.message, fatal: isFatal };
     } finally {
         if (browser) await browser.close();
         log('Run complete.');
     }
 }
 
+async function runWithRetry() {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        log(`Starting run (Attempt ${attempt}/${MAX_RETRIES})...`);
+        const result = await runBot();
+
+        if (result.success) {
+            return { success: true };
+        }
+
+        if (result.fatal) {
+            log(`FATAL error encountered: "${result.error}". Aborting retries.`);
+            return result; // Propagate fatal error immediately
+        }
+
+        if (attempt < MAX_RETRIES) {
+            log(`Run failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying in ${RETRY_DELAY / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        } else {
+            log(`All ${MAX_RETRIES} attempts failed. Last error: "${result.error}"`);
+            return result;
+        }
+    }
+    return { success: false, error: 'Max retries exhausted' };
+}
+
 // Single run argument
 if (process.argv.includes('--run-once')) {
-    runBot();
+    runWithRetry();
 } else {
     // Cron Mode
     log(`Initializing Bot. Running initial check...`);
 
     // Run immediately on startup
-    runBot().then((result) => {
+    runWithRetry().then((result) => {
         if (result.success) {
             log(`Initial check complete. Next run scheduled for: ${CRON_SCHEDULE} (TZ: ${TIMEZONE})`);
             cron.schedule(CRON_SCHEDULE, () => {
-                runBot();
+                runWithRetry();
             }, {
                 scheduled: true,
                 timezone: TIMEZONE
             });
         } else {
-            log(`CRITICAL: Initial run failed: "${result.error}". Entering dormant mode to prevent restart loop. Please fix the error and restart the container.`);
-            // Keep process alive but do nothing, to prevent Docker restart loop spamming notifications
-            setInterval(() => { }, 1000 * 60 * 60 * 24);
+            if (result.fatal) {
+                log(`CRITICAL: Initial run failed with FATAL error: "${result.error}". Entering dormant mode to prevent restart loop. Please fix the error (e.g. cookies) and restart.`);
+                // Keep process alive but do nothing
+                setInterval(() => { }, 1000 * 60 * 60 * 24);
+            } else {
+                log(`WARNING: Initial run failed ("${result.error}"), but error is transient. Scheduling next run for ${CRON_SCHEDULE} (TZ: ${TIMEZONE})`);
+                cron.schedule(CRON_SCHEDULE, () => {
+                    runWithRetry();
+                }, {
+                    scheduled: true,
+                    timezone: TIMEZONE
+                });
+            }
         }
     });
 }
