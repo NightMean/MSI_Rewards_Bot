@@ -11,6 +11,7 @@ Automating actions on rewards.msi.com may violate their Terms of Service. Use at
 
 -  **Automated Daily Login**: Runs automatically every day (default 18:30) - configurable
 -  **Discord Notifications**: Sends rich embed notifications when you reach configured milestones or if the bot fails (e.g. invalid cookies, site changes)
+-  **Resilient**: Includes 3x retry logic and configurable timeouts to handle transient network issues.
 
 ## Prerequisites
 
@@ -57,7 +58,9 @@ Automating actions on rewards.msi.com may violate their Terms of Service. Use at
 | `MILESTONES` | Comma-separated points milestones to track | 400,500,600 | No |
 | `CRON_SCHEDULE` | Cron expression for when the bot runs | `30 18 * * *` (18:30) | No |
 | `TZ` | Timezone for the cron schedule and logs | `Europe/Bratislava` | No |
-| `NAVIGATION_TIMEOUT` | Timeout in ms for page loads. Increase if getting timeouts. | `60000` (60s) | No |
+| `NAVIGATION_TIMEOUT` | Timeout in ms for page loads. Increase if you are getting timeouts. | `60000` (60s) | No |
+| `MAX_RETRIES` | Number of restart attempts if the bot fails (non-fatal errors). | `3` | No |
+| `RETRY_DELAY` | Delay in ms between retries. | `30000` (30s) | No |
 | `SAVE_SCREENSHOTS` | Save debug screenshots to `screenshots/` folder | `false` | No |
 
 ## Build from Source
